@@ -1,0 +1,202 @@
+---
+title: "ggplot2_workshop_part2"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")} #MAC USERS: You must also install xquartz for this to work! Google Xquartz mac install and download the software
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("dslabs")) {install.packages("dslabs"); require("dslabs")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} #tidy data
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("cowplot")) {install.packages("cowplot"); require("cowplot")}  #merge figures
+if (!require("gganimate")) {install.packages("gganimate"); require("gganimate")}
+if (!require("pals")) {install.packages("pals"); require("pals")} #large palette 
+if (!require("ghibli")) {install.packages("ghibli"); require("ghibli")} #Studio Ghibli films 
+if (!require("wesanderson")) {install.packages("wesanderson"); require("wesanderson")} #Wes Anderson films
+if (!require("MetBrewer")) {install.packages("MetBrewer"); require("MetBrewer")} #Metropolitan Museum of Art 
+if (!require("transformr")) {install.packages("transformr"); require("transformr")} #animation support
+if (!require("phyloseq")) {install.packages("phyloseq"); require("phyloseq")} #microbiome
+if (!require("ggthemes")) {install.packages("ggthemes"); require("ggthemes")}
+if (!require("ggsci")) {install.packages("ggsci"); require("ggsci")}
+if (!require("pryr")) {install.packages("pryr"); require("pryr")}
+
+#new packages for this one
+
+if (!require("ggpubr")) {install.packages("ggpubr"); require("ggpubr")}
+if (!require("plyr")) {install.packages("plyr"); require("plyr")}
+if (!require("scales")) {install.packages("scales"); require("scales")}
+
+
+```
+
+# Welcome
+
+Reminders of some useful hotkey Mac shortcuts:
+
+cmd+opt+i = insert code chunk (ctrl+opt+i on Windows)
+opt+- = insert left arrow
+
+
+## Adding in statistical analysis
+
+ggplot2 has a built-in function that you can call to add in automatic statistical analysis to your graphs. You will need to determine the appropriate kind of test to perform, but there are several means comparison tests available in the 'method' argument defaults including t test, Wilcoxon rank-sum, Kruskal-Wallis, and more. The "toothgrowth" dataset we are using is built into R so there is no need to load it in.
+
+```{r}
+# Convert the variable dose from a numeric to a factor variable
+ToothGrowth$dose <- as.factor(ToothGrowth$dose)
+head(ToothGrowth)
+
+ggplot(ToothGrowth, aes(x=dose, y=len, fill = dose)) +
+  geom_boxplot() +
+  stat_compare_means()
+```
+
+The default test for multiple groups is a Kruskal-Wallis test, which is a nonparametric alternative to an ANOVA that can be used to compare differences between means of multiple groups.
+
+What if we want to see specifically how dose 0.5 and 1 compare to each other, for example? 
+
+## Stats review
+
+This time we'll use a t-test. First we will check that our data meets the assumptions required for a t test (does it follow a normal distribution?)
+
+This is generally a good idea to do with your data so that you know you can trust your results and you are using the right test. However, this may also depend on where your data is coming from. Generally, if you have over 30 samples to compare, you can ignore the distribution of the data and use a parametric test because of the central limit theorem. 
+
+Here we are going to start with a Q-Q plot, or quantile-quantile plot. This is a visual check to see whether there is a correlation between a given sample and the normal distribution.
+
+```{r}
+ggqqplot(ToothGrowth$len)
+```
+Visually, this looks good. Let's do a significance test as well. There are a few ways you can do this - using a Kolmogorow-Smirnov (KS) normality test, or a Shapiro-Wilks test. For both of these, the null hypothesis is that the sample distribution is normal. Therefore if it is significant, we can reject the null hypothesis and say that the data is not normal.
+
+```{r}
+shapiro.test(ToothGrowth$len)
+```
+Not significant, which is great in this case! So we can accept the null hypothesis and use the t-test to compare each group.
+
+```{r}
+dose_comparisons <- list(c("0.5", "1"), c("1", "2"), c("0.5", "2")) #make a list with the things you want to compare
+
+ggplot(ToothGrowth, aes(x=dose, y=len, fill = dose)) +
+  geom_boxplot() +
+  stat_compare_means(comparisons = dose_comparisons, method = "t.test") +
+  ggtitle("Tooth growth by dose")
+
+```
+
+Let's add in a facet to get some more information about our data. We want to check if there are differences between the OJ and VC supplement groups.
+
+```{r}
+ggplot(ToothGrowth, aes(x=dose, y=len, fill = dose)) +
+  geom_boxplot() +
+  facet_wrap(~supp) +
+  stat_compare_means(comparisons = dose_comparisons, method = "t.test") +
+  ggtitle("Tooth growth by dose, supplement")
+```
+
+## More advanced
+
+Let's take this myeloma dataset and plot expression profiles of the DEPDC1 gene according to patient molecular group.
+
+Question: does the expression profile of this gene differ between groups?
+
+You could start with a pairwise comparison (every group is compared to every other group) but this can get difficult to interpret since there are so many groups.
+```{r}
+myeloma <- read.delim("https://raw.githubusercontent.com/kassambara/data/master/myeloma.txt")
+
+compare_means(DEPDC1 ~ molecular_group, data = myeloma,
+              method = "t.test")
+```
+
+We can also use a base mean as the reference group - so all group means are compared to a base mean of all groups.
+```{r}
+
+compare_means(DEPDC1 ~ molecular_group,  data = myeloma,
+              ref.group = ".all.", method = "t.test")
+```
+
+Much easier to read. So we find that there are 3 groups that deviate significantly from the mean: hyperdiploid, proliferation, and low bone disease. Now that we know that they differ we can visualize them to check directionality.
+
+```{r}
+ggplot(data = myeloma, aes(x = molecular_group, y = DEPDC1, color = molecular_group, add = "jitter", legend = "none")) +
+  geom_boxplot() +
+  rotate_x_text(angle = 45) +
+  geom_hline(yintercept = mean(myeloma$DEPDC1), linetype = 2)+ # Add horizontal line at base mean
+  stat_compare_means(method = "anova", label.y = 1600)+        # Add global annova p-value
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = ".all.")                      # Pairwise comparison against all
+  
+```
+So now we can see that hyperdiploid and low bone disease subjects have lower expression of this gene, whereas the proliferation group has increased expression compared to the mean.
+
+## Heatmaps
+
+Heatmaps can be great visualization tools to identify patterns in large datasets.
+
+You must have your data in a matrix format with numeric variables. Convert these formats prior to making your heatmap.
+
+We'll use the mtcars dataset here, another dataset built into R for practicing.
+
+```{r}
+str(mtcars)
+cars <- as.matrix(mtcars)
+str(cars)
+
+#default
+
+heatmap(cars)
+```
+
+Difficult to read here because of high hp and disp variables. Let's normalize.
+
+```{r}
+heatmap(cars, scale = "column") # scale by the value in the column - this provides a log transformation
+```
+Much better!
+
+We can also use ggplot to make a heatmap.
+
+Ggplot needs a dataframe, not a matrix SO we will import the original dataframe.
+We will also need to reshape the data to get it into long format instead of wide.
+
+```{r}
+cars.data <- mtcars 
+cars.melt <- reshape2::melt(cars.data)
+
+#take a peek
+head(cars.melt) # now it's in long format
+
+#add in a column for car names
+cars.melt$car <- rep(row.names(cars.data), 11) #repeats 11 times
+
+ggplot(cars.melt, aes(variable, car)) +
+  geom_tile(aes(fill = value))
+```
+
+We still need to rescale. ggplot2 doesn't do this natively so we'll use the reshape2 package again.
+
+```{r}
+library(scales)
+library(plyr)
+#rescale values for all variables in melted data frame
+cars.melt <- ddply(cars.melt, .(variable), transform, rescale = rescale(value))
+head(cars.melt)
+#this adds in a new column with the rescaled/normalized value that we transformed.
+
+ggplot(cars.melt, aes(variable, car)) +
+  geom_tile(aes(fill = rescale))
+```
+
+We can also specify our color gradient.
+
+```{r}
+ggplot(cars.melt, aes(variable, car)) +
+  geom_tile(aes(fill = rescale), colour = "white") +
+  scale_fill_gradient(low = "white", high = "steelblue")
+```
+
+Cool!
