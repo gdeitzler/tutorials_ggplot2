@@ -8,6 +8,6 @@ Files are RMarkdown.
 Sick of the default color schemes in R? Learn how to make your plots beautiful, colorful, and colorblind-friendly with custom palettes!
 This tutorial also demonstrates some of the ways to integrate neat palettes developed by fellow ggplot2 fanatics.
 
-## Adding basic stats
+## Stats Intro
 
 Per request from the Organ Chip team, a file demonstrating how to add on basic statistical comparisons in ggplot2 using stat_compare_means, plus a refresher on basic statistics.
